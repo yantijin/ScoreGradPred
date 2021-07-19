@@ -1,0 +1,11 @@
+tqdm==4.60.0
+ml_collections==0.1.0
+pytorchts==0.4.0
+matplotlib==3.3.4
+pandas==1.1.5
+requests==2.25.1
+numpy==1.19.5
+torch==1.8.0+cu111
+gluonts==0.7.2
+scipy==1.5.4
+tensorboard==2.5.0
