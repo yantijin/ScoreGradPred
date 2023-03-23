@@ -4,6 +4,36 @@ import numpy as np
 import random
 import os
 
+
+def get_noise_fn(sde, model, continuous=False):
+  """Wraps `noise_fn` so that the model output corresponds to a real time-dependent noise function.
+
+  Args:
+    sde: An `sde_lib.SDE` object that represents the forward SDE.
+    model: A score model.
+    train: `True` for training and `False` for evaluation.
+    continuous: If `True`, the score-based model is expected to directly take continuous time steps.
+
+  Returns:
+    A noise prediction function.
+  """
+  # model_fn = get_model_fn(model, train=train)
+
+  if isinstance(sde, VPSDE) and continuous:
+    def noise_fn(x, t, cond):
+      # For VP-trained models, t=0 corresponds to the lowest noise level
+      # The maximum value of time embedding is assumed to 999 for
+      # continuously-trained models.
+      labels = t * (sde.N -  1)
+      noise = model(x, labels, cond)
+      return noise
+
+  else:
+    raise NotImplementedError(f"SDE class {sde.__class__.__name__} not yet supported.")
+
+  return noise_fn
+
+
 def get_score_fn(sde, model, continuous=False):
   """Wraps `score_fn` so that the model output corresponds to a real time-dependent score function.
 

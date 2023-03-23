@@ -22,9 +22,10 @@ import torch
 import numpy as np
 import abc
 
-from .util import from_flattened_numpy, to_flattened_numpy, get_score_fn
+from .util import from_flattened_numpy, to_flattened_numpy, get_score_fn, get_noise_fn
 from scipy import integrate
 from .sde_lib import VESDE, VPSDE, subVPSDE
+from .dpm_solver import NoiseScheduleVP, DPM_Solver, model_wrapper
 
 _CORRECTORS = {}
 _PREDICTORS = {}
@@ -116,6 +117,19 @@ def get_sampling_fn(config, sde, shape, eps):
                                      denoise=config.sampling.noise_removal,
                                      eps=eps,
                                      device=config.device)
+    elif  sampler_name.lower() == 'dpm_solver':
+        sampling_fn = get_dpm_solver_sampler(sde=sde,
+                                    shape=shape,
+                                    steps=config.sampling.n_steps_each,
+                                    eps=eps,
+                                    skip_type=config.sampling.skip_type,
+                                    method=config.sampling.dpm_solver_method,
+                                    order=config.sampling.dpm_solver_order,
+                                    denoise=config.sampling.noise_removal,
+                                    algorithm_type=config.sampling.algorithm_type,
+                                    thresholding=config.sampling.thresholding,
+                                    rtol=config.sampling.rtol,
+                                    device=config.device)
     else:
         raise ValueError(f"Sampler name {sampler_name} unknown.")
 
@@ -406,7 +420,7 @@ def get_pc_sampler(sde, shape, predictor, corrector,  snr,
                 x, x_mean = predictor_update_fn(x, vec_t, cond=cond, model=model)
 
             return x_mean if denoise else x, sde.N * (n_steps + 1)
-            # return inverse_scaler(x_mean if denoise else x), sde.N * (n_steps + 1)
+            # return inverse_scaler(x_mean if denoise else x), sde.N * (n_steps + 1)# TODO: inverse scaler这里需要考虑下
 
     return pc_sampler
 
@@ -483,3 +497,60 @@ def get_ode_sampler(sde, shape, # inverse_scaler,
             return x, nfe
 
     return ode_sampler
+
+
+def get_dpm_solver_sampler(sde, shape, steps=10, eps=1e-3,
+                    skip_type="time_uniform", method="singlestep", order=3,
+                    denoise=False, algorithm_type="dpmsolver", thresholding=False,
+                    rtol=0.05, atol=0.0078, device='cuda'):
+  """Create a Predictor-Corrector (PC) sampler.
+
+  Args:
+    sde: An `sde_lib.SDE` object representing the forward SDE.
+    shape: A sequence of integers. The expected shape of a single sample.
+    predictor: A subclass of `sampling.Predictor` representing the predictor algorithm.
+    corrector: A subclass of `sampling.Corrector` representing the corrector algorithm.
+    inverse_scaler: The inverse data normalizer.
+    snr: A `float` number. The signal-to-noise ratio for configuring correctors.
+    n_steps: An integer. The number of corrector steps per predictor update.
+    probability_flow: If `True`, solve the reverse-time probability flow ODE when running the predictor.
+    continuous: `True` indicates that the score model was continuously trained.
+    denoise: If `True`, add one-step denoising to the final samples.
+    eps: A `float` number. The reverse-time SDE and ODE are integrated to `epsilon` to avoid numerical issues.
+    device: PyTorch device.
+
+  Returns:
+    A sampling function that returns samples and the number of function evaluations during sampling.
+  """
+  ns = NoiseScheduleVP('linear', continuous_beta_0=sde.beta_0, continuous_beta_1=sde.beta_1, total_N=sde.N)
+
+  def dpm_solver_sampler(model, cond):
+    """ The DPM-Solver sampler funciton.
+
+    Args:
+      model: A score model.
+    Returns:
+      Samples, number of function evaluations.
+    """
+    with torch.no_grad():
+      noise_pred_fn = get_noise_fn(sde, model, continuous=True)
+      dpm_solver = DPM_Solver(noise_pred_fn, ns, algorithm_type=algorithm_type, correcting_x0_fn="dynamic_thresholding" if thresholding else None)
+      # Initial sample
+      x = sde.prior_sampling(shape).to(device)
+      x = dpm_solver.sample(
+        x,
+        cond,
+        steps=steps - 1 if denoise else steps,
+        t_start=sde.T,
+        t_end=eps,
+        order=order,
+        skip_type=skip_type,
+        method=method,
+        denoise_to_zero=denoise,
+        atol=atol,
+        rtol=rtol,
+        lower_order_final=False,
+      )
+      return x, steps
+
+  return dpm_solver_sampler
