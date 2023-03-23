@@ -5,7 +5,7 @@ from configs.elec.elec_config import get_default_configs
 def get_elec_smld_cont_config():
     config = get_default_configs()
 
-    config.weight_decay = 0.999
+    config.weight_decay = None
     config.reduce_mean = True
     config.likelihood_weighting = False
     config.batch_size = 64
