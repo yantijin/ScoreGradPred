@@ -25,8 +25,7 @@ dataset_test = test_grouper(dataset.test)
 
 ### Create estimator
 
-* Configuration for dataset can be set in folder `config`, we list a demo for `Electricity`
-
+- Configuration for dataset can be set in folder `config`, we list a demo for `Electricity`
 
 ```python
 estimator = ScoreGradEstimator(
@@ -101,7 +100,12 @@ agg_metric, item_metrics = evaluator(targets, forecasts, num_series=len(dataset_
 ```bash
 python run_elec.py --data elec --name ddpm_c --beta1 0.01 --beta2 15 --scale 200 --epochs 40 --batch 64
 ```
-## Fast sampling option
-* We add a conditional ODE sampler for acceleration of the prediction process. It takes only around 20 steps for sampling and it can increase the prediciton speed by up to 4.9 times without performance degradation.
-<img src="./assets/scale.jpg" alt="performance with diffusion steps" width="400px" />
 
+## Fast sampling option
+
+- We add a conditional ODE sampler for acceleration of the prediction process. It takes only around 20 steps for sampling and it can increase the prediciton speed by up to 4.9 times without performance degradation.
+  <img src="./assets/scale.jpg" alt="performance with diffusion steps" width="400px" />
+
+###
+
+Model weights and corresponding logs are avaliable at [Google Drive](https://drive.google.com/drive/folders/18yMwZBT_S-SpNjV-nW4G5Gf0rZYUZwW3)
